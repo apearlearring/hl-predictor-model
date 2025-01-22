@@ -1,0 +1,70 @@
+[MASTER]
+# Python code files to analyze
+ignore=CVS
+persistent=yes
+load-plugins=
+
+# Use multiple processes to speed up Pylint
+jobs=4
+
+[MESSAGES CONTROL]
+# Disable specific warnings
+disable=C0111,  # missing-docstring
+        C0103,  # invalid-name (for ML variables like X, y)
+        W0611,  # unused-import (helpful during development)
+        R0903,  # too-few-public-methods
+        R0913,  # too-many-arguments
+        R0914,  # too-many-locals
+        W0621,  # redefined-outer-name (common in ML notebooks)
+        W0703   # broad-except
+
+[REPORTS]
+# Set the output format
+output-format=text
+reports=no
+evaluation=10.0
+
+[BASIC]
+# Regular expressions for various naming styles
+good-names=i,j,k,ex,Run,_,x,y,X,Y,df,ax,id
+
+# Regular expression which should only match function or class names
+function-rgx=[a-z_][a-z0-9_]{2,50}$
+class-rgx=[A-Z_][a-zA-Z0-9]+$
+
+# Regular expression which should only match correct variable names
+variable-rgx=[a-z_][a-z0-9_]{2,30}$
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=120
+
+# Maximum number of lines in a module
+max-module-lines=2000
+
+# String used as indentation unit
+indent-string='    '
+
+[SIMILARITIES]
+# Minimum lines number of a similarity
+min-similarity-lines=4
+
+# Ignore imports when computing similarities
+ignore-imports=yes
+
+[TYPECHECK]
+# List of module names for which member attributes should not be checked
+ignored-modules=numpy,torch,tensorflow,cv2,matplotlib.pyplot
+
+# List of classes names for which member attributes should not be checked
+ignored-classes=numpy,torch,tensorflow
+
+[MISCELLANEOUS]
+# List of note tags to take into consideration
+notes=FIXME,TODO,XXX,HACK
+
+[VARIABLES]
+# A regular expression matching the beginning of the name of dummy variables
+dummy-variables-rgx=_$|dummy
+
+# List of additional names to consider as builtins 
