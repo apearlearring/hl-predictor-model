@@ -74,17 +74,18 @@ class LstmModel(Model):
         if isinstance(data, pd.DataFrame):
             # Process DataFrame input
             # Initialize the scaler
-            scaler_close = MinMaxScaler(feature_range=(0, 1))
-            scaler_high = MinMaxScaler(feature_range=(0, 1))
-            scaler_low = MinMaxScaler(feature_range=(0, 1))
-            scaler_open = MinMaxScaler(feature_range=(0, 1))
-            scaler_volume = MinMaxScaler(feature_range=(0, 1))
-            scaler_market_cap = MinMaxScaler(feature_range=(0, 1))
+            scaler_funding   = MinMaxScaler(feature_range=(0, 1))
+            scaler_open_interest = MinMaxScaler(feature_range=(0, 1))
+            scaler_premium = MinMaxScaler(feature_range=(0, 1))
+            scaler_day_ntl_vlm = MinMaxScaler(feature_range=(0, 1))
+            scaler_current_price = MinMaxScaler(feature_range=(0, 1))
+            scaler_long_number = MinMaxScaler(feature_range=(0, 1))
+            scaler_short_number = MinMaxScaler(feature_range=(0, 1))
 
             # Ensure the 'date' column is a DatetimeIndex for resampling
-            if "date" in data.columns:
-                data["date"] = pd.to_datetime(data["date"])
-                data = data.set_index("date")
+            if "time" in data.columns:
+                data["time"] = pd.to_datetime(data["time"])
+                data = data.set_index("time")
 
             # Select only numeric columns for resampling
             numeric_data = data.select_dtypes(include=[np.number])  # type: ignore
@@ -100,29 +101,33 @@ class LstmModel(Model):
                 data = numeric_data
 
             # Normalize the data
-            high_prices = data["high"].values.astype(float).reshape(-1, 1)
-            low_prices = data["low"].values.astype(float).reshape(-1, 1)
-            open_prices = data["open"].values.astype(float).reshape(-1, 1)
-            volume_prices = data["volume"].values.astype(float).reshape(-1, 1)
-            market_cap_prices = data["marketCap"].values.astype(float).reshape(-1, 1)
-            close_prices = data["close"].values.astype(float).reshape(-1, 1)
+            funding = data["funding"].values.astype(float).reshape(-1, 1)
+            open_interest = data["open_interest"].values.astype(float).reshape(-1, 1)
+            premium = data["premium"].values.astype(float).reshape(-1, 1)
+            day_ntl_vlm = data["day_ntl_vlm"].values.astype(float).reshape(-1, 1)
+            current_price = data["current_price"].values.astype(float).reshape(-1, 1)
+            long_number = data["long_number"].values.astype(float).reshape(-1, 1)
+            short_number = data["short_number"].values.astype(float).reshape(-1, 1)
+            
 
             # Scale each feature
-            scaled_close_prices = scaler_close.fit_transform(close_prices)
-            scaled_high_prices = scaler_high.fit_transform(high_prices)
-            scaled_low_prices = scaler_low.fit_transform(low_prices)
-            scaled_open_prices = scaler_open.fit_transform(open_prices)
-            scaled_volume_prices = scaler_volume.fit_transform(volume_prices)
-            scaled_market_cap_prices = scaler_market_cap.fit_transform(market_cap_prices)
+            scaled_funding = scaler_funding.fit_transform(funding)
+            scaled_open_interest = scaler_open_interest.fit_transform(open_interest)
+            scaled_premium = scaler_premium.fit_transform(premium)
+            scaled_day_ntl_vlm = scaler_day_ntl_vlm.fit_transform(day_ntl_vlm)
+            scaled_current_price = scaler_current_price.fit_transform(current_price)
+            scaled_long_number = scaler_long_number.fit_transform(long_number)
+            scaled_short_number = scaler_short_number.fit_transform(short_number)
 
             # Stack the scaled features horizontally into a single array
             scaled_data = np.hstack((
-                scaled_close_prices,
-                scaled_high_prices,
-                scaled_low_prices,
-                scaled_open_prices,
-                scaled_volume_prices,
-                scaled_market_cap_prices
+                scaled_current_price,
+                scaled_funding,
+                scaled_open_interest,
+                scaled_premium,
+                scaled_day_ntl_vlm,
+                scaled_long_number,
+                scaled_short_number
             ))
 
             # Prepare sequences
@@ -199,9 +204,9 @@ class LstmModel(Model):
         self.model.eval()
 
         # Ensure the 'date' column is present and set it as the index for resampling
-        if "date" in input_data.columns:
-            input_data["date"] = pd.to_datetime(input_data["date"])
-            input_data = input_data.set_index("date")  # Set 'date' as index
+        if "time" in input_data.columns:
+            input_data["time"] = pd.to_datetime(input_data["time"])
+            input_data = input_data.set_index("time")  # Set 'date' as index
 
         # Resample based on the specified interval in the config
         input_data = input_data.resample(self.config.interval).mean().dropna()
@@ -334,7 +339,7 @@ class LstmModel(Model):
         # Now create the DataFrame with the 'date' and predictions columns
         df_predictions = pd.DataFrame(
             {
-                "date": input_data["date"][
+                "time": input_data["time"][
                     : len(predictions)
                 ],  # Ensure the date column matches the length of predictions
                 "prediction": predictions,
@@ -349,17 +354,18 @@ class LstmModel(Model):
         self.model.eval()
 
         # Initialize scalers for each feature
-        scaler_close = MinMaxScaler(feature_range=(0, 1))
-        scaler_high = MinMaxScaler(feature_range=(0, 1))
-        scaler_low = MinMaxScaler(feature_range=(0, 1))
-        scaler_open = MinMaxScaler(feature_range=(0, 1))
-        scaler_volume = MinMaxScaler(feature_range=(0, 1))
-        scaler_market_cap = MinMaxScaler(feature_range=(0, 1))
+        scaler_funding = MinMaxScaler(feature_range=(0, 1))
+        scaler_open_interest = MinMaxScaler(feature_range=(0, 1))
+        scaler_premium = MinMaxScaler(feature_range=(0, 1))
+        scaler_day_ntl_vlm = MinMaxScaler(feature_range=(0, 1))
+        scaler_current_price = MinMaxScaler(feature_range=(0, 1))
+        scaler_long_number = MinMaxScaler(feature_range=(0, 1))
+        scaler_short_number = MinMaxScaler(feature_range=(0, 1))
 
         # Ensure 'date' column exists and set it as index for resampling
-        if "date" in last_known_data.columns:
-            last_known_data["date"] = pd.to_datetime(last_known_data["date"])
-            last_known_data = last_known_data.set_index("date")
+        if "time" in last_known_data.columns:
+            last_known_data["time"] = pd.to_datetime(last_known_data["time"])
+            last_known_data = last_known_data.set_index("time")
 
         # Resample based on the specified interval in the config
         last_known_data = last_known_data.resample(self.config.interval).mean().dropna()
@@ -371,33 +377,36 @@ class LstmModel(Model):
             )
 
         # Scale each feature
-        high_prices = last_known_data["high"].values.astype(float).reshape(-1, 1)
-        low_prices = last_known_data["low"].values.astype(float).reshape(-1, 1)
-        open_prices = last_known_data["open"].values.astype(float).reshape(-1, 1)
-        volume_prices = last_known_data["volume"].values.astype(float).reshape(-1, 1)
-        market_cap_prices = last_known_data["marketCap"].values.astype(float).reshape(-1, 1)
-        close_prices = last_known_data["close"].values.astype(float).reshape(-1, 1)
+        funding = last_known_data["funding"].values.astype(float).reshape(-1, 1)
+        open_interest = last_known_data["open_interest"].values.astype(float).reshape(-1, 1)
+        premium = last_known_data["premium"].values.astype(float).reshape(-1, 1)
+        day_ntl_vlm = last_known_data["volume"].values.astype(float).reshape(-1, 1)
+        current_price = last_known_data["current_price"].values.astype(float).reshape(-1, 1)
+        long_number = last_known_data["long_number"].values.astype(float).reshape(-1, 1)
+        short_number = last_known_data["short_number"].values.astype(float).reshape(-1, 1)
 
         # Scale each feature
-        scaled_close_prices = scaler_close.fit_transform(close_prices)
-        scaled_high_prices = scaler_high.fit_transform(high_prices)
-        scaled_low_prices = scaler_low.fit_transform(low_prices)
-        scaled_open_prices = scaler_open.fit_transform(open_prices)
-        scaled_volume_prices = scaler_volume.fit_transform(volume_prices)
-        scaled_market_cap_prices = scaler_market_cap.fit_transform(market_cap_prices)
+        scaled_funding = scaler_funding.fit_transform(funding)
+        scaled_open_interest = scaler_open_interest.fit_transform(open_interest)
+        scaled_premium = scaler_premium.fit_transform(premium)
+        scaled_day_ntl_vlm = scaler_day_ntl_vlm.fit_transform(day_ntl_vlm)
+        scaled_current_price = scaler_current_price.fit_transform(current_price)
+        scaled_long_number = scaler_long_number.fit_transform(long_number)
+        scaled_short_number = scaler_short_number.fit_transform(short_number)
 
         # Stack the scaled features horizontally
         scaled_data = np.hstack((
-            scaled_close_prices,
-            scaled_high_prices,
-            scaled_low_prices,
-            scaled_open_prices,
-            scaled_volume_prices,
-            scaled_market_cap_prices
+            scaled_current_price,
+            scaled_funding,
+            scaled_open_interest,
+            scaled_premium,
+            scaled_day_ntl_vlm,
+            scaled_long_number,
+            scaled_short_number
         ))
 
         # Prepare the last sequence of data for forecasting
-        last_sequence = scaled_data[-self.config.time_steps:].reshape(1, self.config.time_steps, 6)
+        last_sequence = scaled_data[-self.config.time_steps:].reshape(1, self.config.time_steps, 7)
         predictions = []
 
         with torch.no_grad():
@@ -407,23 +416,24 @@ class LstmModel(Model):
                 predicted_scaled = predicted_scaled.cpu().numpy()
 
                 # Inverse transform the predicted value (only for close price)
-                predicted = scaler_close.inverse_transform(predicted_scaled)
+                predicted = scaler_current_price.inverse_transform(predicted_scaled)
                 predictions.append(predicted.flatten()[0])
 
                 # Create next sequence input (shift window and append prediction)
                 # We'll repeat the last known values for other features
                 new_row = np.array([
-                    predicted_scaled[0, 0],  # close
-                    scaled_data[-1, 1],      # high
-                    scaled_data[-1, 2],      # low
-                    scaled_data[-1, 3],      # open
-                    scaled_data[-1, 4],      # volume
-                    scaled_data[-1, 5],      # marketCap
+                    predicted_scaled[0, 0],  # current_price
+                    scaled_data[-1, 1],      # funding
+                    scaled_data[-1, 2],      # open_interest
+                    scaled_data[-1, 3],      # premium
+                    scaled_data[-1, 4],      # day_ntl_vlm
+                    scaled_data[-1, 5],      # long_number
+                    scaled_data[-1, 6],      # short_number
                 ]).reshape(1, -1)
 
                 last_sequence = np.concatenate([
                     last_sequence[:, 1:, :],
-                    new_row.reshape(1, 1, 6)
+                    new_row.reshape(1, 1, 7)
                 ], axis=1)
 
                 if self.debug:
@@ -438,7 +448,7 @@ class LstmModel(Model):
 
         # Create a DataFrame for the forecasted values
         df_forecast = pd.DataFrame({
-            "date": forecast_dates,
+            "time": forecast_dates,
             "Forecasted Close": predictions,
         })
 

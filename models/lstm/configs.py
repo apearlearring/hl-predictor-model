@@ -10,7 +10,7 @@ class LstmConfig:
 
     def __init__(self):
         # Model architecture parameters
-        self.input_size = 6  # Input size (number of features)
+        self.input_size = 7  # Input size (number of features)
         self.hidden_size = 64  # Number of LSTM units per layer
         self.output_size = 1  # Output size (prediction dimension)
         self.num_layers = 2  # Number of stacked LSTM layers

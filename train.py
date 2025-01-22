@@ -2,18 +2,19 @@ import numpy as np
 import pandas as pd
 
 # pylint: disable=no-name-in-module
-from data.csv_loader import CSVLoader
+from configs import models
+
+from data.loader import Loader
 from models.model_factory import ModelFactory
 from utils.common import print_colored
-from configs import models
 
 
 def select_data(file_path=None):
 
-    print("You selected to load data from a CSV file.")
+    print("You selected to load data from a csv file.")
     if file_path is None:
-        file_path = input("Enter the CSV file path: ").strip()
-    return CSVLoader.load_csv(file_path)
+        file_path = input("Enter the csv file path: ").strip()
+    return Loader.load_csv(file_path)
 
 
 def model_selection_input():
@@ -49,7 +50,7 @@ def model_selection_input():
 def prepare_lstm_data(data, time_steps):
     """Prepare data for LSTM model with correct dimensions."""
     # Select required features
-    features = ['open', 'high', 'low', 'close', 'volume', 'marketCap']
+    features = ['funding', 'open_interest', 'premium', 'day_ntl_vlm', 'current_price', 'long_number', 'short_number']
 
     # Ensure all required columns exist
     for feature in features:
@@ -74,11 +75,11 @@ def prepare_lstm_data(data, time_steps):
 def main():
 
     # Select data dynamically based on user input
-    data = select_data("data/sets/eth.csv")  # example testing defaults , "4", "data/sets/eth.csv"
+    data = select_data("data/sets/BTC_metrics.csv")  # example testing defaults , "4", "data/sets/eth.csv"
 
     # Convert date column to datetime if it's not already
-    if 'date' in data.columns:
-        data['date'] = pd.to_datetime(data['date'])
+    if 'time' in data.columns:
+        data['time'] = pd.to_datetime(data['time'])
 
     # Initialize ModelFactory
     factory = ModelFactory()

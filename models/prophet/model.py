@@ -21,16 +21,16 @@ class ProphetModel(Model):
         )
 
     def train(self, data: pd.DataFrame):
-        df = data[["date", "close"]].copy()
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = data[["time", "current_price"]].copy()
+        df["time"] = pd.to_datetime(df["time"], errors="coerce")
 
         # Drop rows with NaN values in 'date' or 'close'
-        df = df.dropna(subset=["date", "close"])
+        df = df.dropna(subset=["time", "current_price"])
 
         if self.config.remove_timezone:
-            df["date"] = df["date"].dt.tz_localize(None)
+            df["time"] = df["time"].dt.tz_localize(None)
 
-        df = df.rename(columns={"date": "ds", "close": "y"})
+        df = df.rename(columns={"time": "ds", "current_price": "y"})
 
         # Handle logistic growth: Set 'cap' and 'floor' values
         if self.config.growth == "logistic":

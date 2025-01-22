@@ -23,7 +23,7 @@ class ArimaModel(Model):
 
     def train(self, data: pd.DataFrame):
         """Train ARIMA model on the 'close' prices"""
-        close_prices = data["close"]
+        close_prices = data["current_price"]
 
         # Set proper datetime index or reset the index if dates are available
         if "date" in data.columns:
@@ -67,11 +67,11 @@ class ArimaModel(Model):
                 "Model is not trained. Please train the model before calling forecast."
             )
 
-        close_prices = input_data["close"]
+        close_prices = input_data["current_price"]
 
         # Resample the input data to the desired interval
         close_prices = pd.Series(
-            close_prices.values, index=pd.to_datetime(input_data["date"])
+            close_prices.values, index=pd.to_datetime(input_data["time"])
         )
         close_prices = resample_data(self, close_prices)
 
@@ -90,7 +90,7 @@ class ArimaModel(Model):
             predictions.values, index=close_prices.index.astype(str)
         )
         return pd.DataFrame(
-            {"date": predictions.index, "prediction": predictions.values.ravel()}
+            {"time": predictions.index, "prediction": predictions.values.ravel()}
         )
 
     def forecast(self, steps: int) -> pd.DataFrame:

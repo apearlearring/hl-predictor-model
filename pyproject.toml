@@ -9,6 +9,9 @@ python = "^3.10"
 numpy = "^2.2.2"
 pandas = "^2.2.3"
 torch = "^2.5.1"
+scikit-learn = "^1.6.1"
+prophet = "^1.1.6"
+statsmodels = "^0.14.4"
 
 [tool.poetry.dev-dependencies]
 
