@@ -18,7 +18,7 @@ class Model(ABC):
     ]  # Custom model types: 'pytorch' and 'pkl'
 
     def __init__(
-        self, model_name, model_type="pkl", save_dir="trained_models", debug=False
+        self, model_name, model_type="pkl", save_dir="trained_models", debug=True
     ):
         self.debug = debug
         self.model_name = model_name
@@ -76,6 +76,7 @@ class Model(ABC):
     def load(self):
         """Load the model and scaler (if applicable) from disk."""
         model_dir = os.path.join(self.save_dir, self.model_name)
+        print(model_dir)
         try:
             if self.model_type == "pytorch":
                 # Load PyTorch model's state_dict

@@ -51,7 +51,7 @@ class LSTM(nn.Module):
 class LstmModel(Model):
     """LSTM model for time series forecasting"""
 
-    def __init__(self, model_name="lstm", config=LstmConfig(), debug=False):
+    def __init__(self, model_name="lstm", config=LstmConfig(), debug=True):
         super().__init__(model_name=model_name, model_type="pytorch", debug=debug)
         self.config = config  # Use the configuration class
         self.model = LSTM(

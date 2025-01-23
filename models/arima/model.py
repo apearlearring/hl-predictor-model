@@ -20,32 +20,35 @@ class ArimaModel(Model):
         super().__init__(model_name=model_name, debug=debug)
         self.model = None
         self.config = config  # Configuration instance passed to the model
-
+        self.best_params = self.config.best_params
+        
     def train(self, data: pd.DataFrame):
         """Train ARIMA model on the 'close' prices"""
-        close_prices = data["current_price"]
+        current_prices = data["current_price"]
 
         # Set proper datetime index or reset the index if dates are available
-        if "date" in data.columns:
-            close_prices = pd.Series(
-                close_prices.values, index=pd.to_datetime(data["date"])
+        if "time" in data.columns:
+            current_prices = pd.Series(
+                current_prices.values, index=pd.to_datetime(data["time"])
             )  # Set the index with a datetime index
 
             # Resample the data to the configured interval
-            close_prices = resample_data(self, close_prices)
+            current_prices = resample_data(self, current_prices)
 
         # Perform stationarity check and differencing if necessary
-        p_value = adf_test(close_prices)
+        print("current_prices")
+        print(current_prices)
+        p_value = adf_test(current_prices)
         if p_value > 0.05:
             print("Data is not stationary, applying differencing...")
-            close_prices = differencing(close_prices)
+            current_prices = differencing(current_prices)
 
         # Perform enhanced grid search if enabled in the configuration
         if self.config.use_grid_search:
             print("Performing grid search for ARIMA parameters...")
             grid_search_arima(
                 self,
-                data=close_prices,
+                data=current_prices,
                 p_values=self.config.p_values,
                 d_values=self.config.d_values,
                 q_values=self.config.q_values,
@@ -54,7 +57,9 @@ class ArimaModel(Model):
             print("Using default ARIMA parameters...")
 
         # Fit ARIMA model with the configured or best-found parameters
-        self.model = ARIMA(close_prices, order=self.config.best_params)
+        print("best_params")
+        print(self.best_params)
+        self.model = ARIMA(current_prices, order=self.best_params)
         self.model = self.model.fit(method_kwargs={"maxiter": self.config.max_iter})
 
         # Save the model
@@ -67,27 +72,27 @@ class ArimaModel(Model):
                 "Model is not trained. Please train the model before calling forecast."
             )
 
-        close_prices = input_data["current_price"]
+        current_prices = input_data["current_price"]
 
         # Resample the input data to the desired interval
-        close_prices = pd.Series(
-            close_prices.values, index=pd.to_datetime(input_data["time"])
+        current_prices = pd.Series(
+            current_prices.values, index=pd.to_datetime(input_data["time"])
         )
-        close_prices = resample_data(self, close_prices)
+        current_prices = resample_data(self, current_prices)
 
         # Forecast the number of steps equal to the length of the input data
-        predictions = self.model.forecast(steps=len(close_prices))
+        predictions = self.model.forecast(steps=len(current_prices))
 
         # If differencing was applied, reverse the differencing to get price predictions
         if self.config.best_params[1] > 0:  # If d > 0, reverse differencing
-            predictions = reverse_differencing(close_prices, predictions)
+            predictions = reverse_differencing(current_prices, predictions)
 
         # Replace unreasonable negative values with NaN
         predictions[predictions < 0] = np.nan
 
         # Convert the date to string and return results
         predictions = pd.Series(
-            predictions.values, index=close_prices.index.astype(str)
+            predictions.values, index=current_prices.index.astype(str)
         )
         return pd.DataFrame(
             {"time": predictions.index, "prediction": predictions.values.ravel()}

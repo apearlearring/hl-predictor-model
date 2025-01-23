@@ -8,9 +8,10 @@ from models.prophet.configs import ProphetConfig
 class ProphetModel(Model):
     """Prophet model for time series forecasting"""
 
-    def __init__(self, model_name="prophet", config=ProphetConfig(), debug=False):
+    def __init__(self, model_name="prophet", config=ProphetConfig(), debug=True):
         super().__init__(model_name=model_name, debug=debug)
         self.config = config  # Use the configuration class
+        self.cap = None
         self.model = Prophet(
             growth=self.config.growth,
             changepoint_prior_scale=self.config.changepoint_prior_scale,
@@ -54,13 +55,13 @@ class ProphetModel(Model):
             print(input_data)
 
         # Ensure the 'date' column exists in the input data before proceeding
-        if "date" not in input_data.columns:
+        if "time" not in input_data.columns:
             raise KeyError(
                 "The input_data must contain a 'date' column for Prophet predictions."
             )
 
         # Rename 'date' to 'ds' for Prophet
-        future = input_data[["date"]].rename(columns={"date": "ds"}).copy()
+        future = input_data[["time"]].rename(columns={"time": "ds"}).copy()
 
         if self.config.remove_timezone:
             future["ds"] = pd.to_datetime(future["ds"]).dt.tz_localize(None)
@@ -70,8 +71,10 @@ class ProphetModel(Model):
             if "cap" not in input_data.columns:
                 # Dynamically set 'cap' if missing (assuming similar logic as training)
                 future["cap"] = (
-                    input_data["close"].max() * 1.1
+                    input_data["current_price"].max() * 1.1
                 )  # Example logic for setting 'cap'
+                
+                self.cap = future['cap']
 
             if "floor" not in input_data.columns:
                 # Set the 'floor' if it's missing (e.g., default to 0)
@@ -87,9 +90,14 @@ class ProphetModel(Model):
             print("Forecast Output:")
             print(forecast[["ds", "yhat"]])
 
-        return pd.DataFrame({"date": forecast["ds"], "prediction": forecast["yhat"]})
+        return pd.DataFrame({"time": forecast["ds"], "prediction": forecast["yhat"]})
 
     def forecast(self, steps: int) -> pd.DataFrame:
-        future_dates = self.model.make_future_dataframe(periods=steps)
+        print(steps)
+        future_dates = self.model.make_future_dataframe(periods=12, freq="5min")
+        future_dates['floor'] = 0  # Adjust as needed
+        future_dates['cap'] = self.cap  # Set to your defined cap value if applicable
+        print("future_dates")
+        print(future_dates)
         forecast = self.model.predict(future_dates)
         return forecast[["ds", "yhat"]].tail(steps)

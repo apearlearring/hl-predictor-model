@@ -10,21 +10,16 @@ class ProphetConfig:
 
     def __init__(self):
         # Prophet model configuration
-        self.growth = "logistic"  # Options: 'linear', 'logistic'
-        self.cap = None  # Optional, for logistic growth. Can be dynamically calculated if None.
-        self.changepoint_prior_scale = 0.25  # Regularization strength for changepoints
-        self.seasonality_mode = (
-            "multiplicative"  # Options: 'additive', 'multiplicative'
-        )
-        self.yearly_seasonality = False  # Whether to include yearly seasonality
-        self.weekly_seasonality = True  # Whether to include weekly seasonality
-        self.daily_seasonality = True  # Whether to include daily seasonality
+        self.growth = "linear"  # Changed from "logistic" to "linear"
+        self.changepoint_prior_scale = 0.05
+        self.yearly_seasonality = False
+        self.weekly_seasonality = False
+        self.daily_seasonality = True
+        self.seasonality_mode = "multiplicative"
+        self.remove_timezone = True
 
         # Forecast parameters
         self.periods = 365  # Default number of periods for future forecasts (trading days for stocks usually 252)
-
-        # Data preprocessing
-        self.remove_timezone = True  # Whether to remove timezone information from dates
 
     def display(self):
         """Prints out the current configuration."""

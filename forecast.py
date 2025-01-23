@@ -56,7 +56,7 @@ def main():
     for model_type in model_types:
         print(f"Forecasting {model_type} model...")
         model = factory.create_model(model_type)
-        
+        model.load()
         if model_type == 'lstm':    
             # Convert Series to DataFrame with a single row
             forcasted_data = model.forecast(steps, last_known_data=last_known_data)

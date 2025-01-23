@@ -8,7 +8,7 @@ class ArimaConfig:
     grid search, and training options.
     """
 
-    def __init__(self, use_grid_search=True, interval="D"):
+    def __init__(self, use_grid_search=True, interval="5min"):
         # Model parameters (p, d, q) - for manual configuration
         self.best_params = (1, 1, 0)
 

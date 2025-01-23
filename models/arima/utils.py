@@ -28,6 +28,7 @@ def grid_search_arima(self, data: pd.Series, p_values, d_values, q_values):
         for d in d_values:
             for q in q_values:
                 try:
+                    print(p)
                     model = ARIMA(data, order=(p, d, q)).fit()
                     aic = model.aic
                     if aic < best_aic:
