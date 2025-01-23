@@ -162,8 +162,8 @@ def main():
         # Load data
         data = Loader.load_csv(args.data)
         
-        required_features = ['time', 'funding', 'open_interest', 'premium', 
-                           'day_ntl_vlm', 'current_price', 'long_number', 'short_number']
+        required_features = ['time', 'current_price', 'funding', 'open_interest', 'premium', 
+                           'day_ntl_vlm',  'long_number', 'short_number']
         
         # Filter data based on start_time if provided
         if args.start_time:

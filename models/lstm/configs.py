@@ -19,7 +19,7 @@ class LstmConfig:
         # Training parameters
         self.learning_rate = 0.0001  # Learning rate for the optimizer
         self.batch_size = 32  # Batch size for training
-        self.epochs = 100  # Number of training epochs
+        self.epochs = 300  # Number of training epochs
         self.early_stopping_patience = 10  # Early stopping patience in epochs
 
         # Data processing

@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
 from torch import nn
 from torch.optim.adam import Adam
 from torch.utils.data import DataLoader, TensorDataset
+import joblib
+from pathlib import Path
 
 from models.base_model import Model
 from models.lstm.configs import LstmConfig
@@ -68,138 +70,184 @@ class LstmModel(Model):
             lr=self.config.learning_rate,
         )
 
-    # pylint: disable=too-many-locals,too-many-statements
-    def train(self, data):
-        """Train the LSTM model with either DataFrame or preprocessed numpy array."""
-        if isinstance(data, pd.DataFrame):
-            # Process DataFrame input
-            # Initialize the scaler
-            scaler_funding   = MinMaxScaler(feature_range=(0, 1))
-            scaler_open_interest = MinMaxScaler(feature_range=(0, 1))
-            scaler_premium = MinMaxScaler(feature_range=(0, 1))
-            scaler_day_ntl_vlm = MinMaxScaler(feature_range=(0, 1))
-            scaler_current_price = MinMaxScaler(feature_range=(0, 1))
-            scaler_long_number = MinMaxScaler(feature_range=(0, 1))
-            scaler_short_number = MinMaxScaler(feature_range=(0, 1))
+        # Initialize scalers dictionary
+        self.scalers = {}
+        self.feature_names = [
+            'current_price', 'funding', 'open_interest', 'premium',
+            'day_ntl_vlm', 'long_number', 'short_number'
+        ]
 
-            # Ensure the 'date' column is a DatetimeIndex for resampling
-            if "time" in data.columns:
-                data["time"] = pd.to_datetime(data["time"])
-                data = data.set_index("time")
-
-            # Select only numeric columns for resampling
-            numeric_data = data.select_dtypes(include=[np.number])  # type: ignore
-
-            # Resample the data based on the configured interval
-            numeric_data = numeric_data.resample(self.config.interval).mean().dropna()
-
-            # Reattach the non-numeric data (e.g., 'asset' column) after resampling if needed
-            if "asset" in data.columns:
-                asset_data = data[["asset"]].resample(self.config.interval).first()
-                data = numeric_data.join(asset_data)
+    def _initialize_scalers(self):
+        """Initialize scalers for each feature"""
+        for feature in self.feature_names:
+            if feature in ['current_price', 'day_ntl_vlm']:
+                # Use RobustScaler for price and volume data to handle outliers
+                self.scalers[feature] = RobustScaler()
             else:
-                data = numeric_data
+                # Use StandardScaler for other features
+                self.scalers[feature] = StandardScaler()
 
-            # Normalize the data
-            funding = data["funding"].values.astype(float).reshape(-1, 1)
-            open_interest = data["open_interest"].values.astype(float).reshape(-1, 1)
-            premium = data["premium"].values.astype(float).reshape(-1, 1)
-            day_ntl_vlm = data["day_ntl_vlm"].values.astype(float).reshape(-1, 1)
-            current_price = data["current_price"].values.astype(float).reshape(-1, 1)
-            long_number = data["long_number"].values.astype(float).reshape(-1, 1)
-            short_number = data["short_number"].values.astype(float).reshape(-1, 1)
+    def _save_scalers(self):
+        """Save scalers to disk"""
+        scaler_dir = Path('trained_models') / self.model_name / 'scalers'
+        scaler_dir.mkdir(parents=True, exist_ok=True)
+        
+        for feature, scaler in self.scalers.items():
+            scaler_path = scaler_dir / f'{feature}_scaler.pkl'
+            joblib.dump(scaler, scaler_path)
+
+    def _load_scalers(self):
+        """Load scalers from disk"""
+        scaler_dir = Path('trained_models') / self.model_name / 'scalers'
+        
+        for feature in self.feature_names:
+            scaler_path = scaler_dir / f'{feature}_scaler.pkl'
+            if scaler_path.exists():
+                self.scalers[feature] = joblib.load(scaler_path)
+            else:
+                raise FileNotFoundError(f"Scaler not found for feature: {feature}")
+
+    def _scale_features(self, data: pd.DataFrame) -> np.ndarray:
+        """
+        Scale features using appropriate scalers
+        
+        Args:
+            data: DataFrame containing features to scale
             
+        Returns:
+            Scaled features as numpy array
+        """
+        scaled_features = []
+        
+        # Initialize scalers if not already done
+        if not self.scalers:
+            self._initialize_scalers()
+        
+        for feature in self.feature_names:
+            if feature not in data.columns:
+                raise ValueError(f"Required feature '{feature}' not found in data")
+                
+            values = data[feature].values.reshape(-1, 1)
+            
+            # Fit the scaler if it hasn't been fitted yet
+            if not hasattr(self.scalers[feature], 'mean_') or not hasattr(self.scalers[feature], 'scale_'):
+                self.scalers[feature].fit(values)
+            
+            scaled_values = self.scalers[feature].transform(values)
+            scaled_features.append(scaled_values)
+        
+        return np.hstack(scaled_features)
 
-            # Scale each feature
-            scaled_funding = scaler_funding.fit_transform(funding)
-            scaled_open_interest = scaler_open_interest.fit_transform(open_interest)
-            scaled_premium = scaler_premium.fit_transform(premium)
-            scaled_day_ntl_vlm = scaler_day_ntl_vlm.fit_transform(day_ntl_vlm)
-            scaled_current_price = scaler_current_price.fit_transform(current_price)
-            scaled_long_number = scaler_long_number.fit_transform(long_number)
-            scaled_short_number = scaler_short_number.fit_transform(short_number)
+    def _create_sequences(self, scaled_data: np.ndarray, 
+                         sequence_length: int) -> tuple[np.ndarray, np.ndarray]:
+        """Create sequences for training/inference"""
+        sequences = []
+        targets = []
+        
+        for i in range(len(scaled_data) - sequence_length):
+            sequence = scaled_data[i:(i + sequence_length)]
+            target = scaled_data[i + sequence_length, 0]  # First feature is price
+            sequences.append(sequence)
+            targets.append(target)
+            
+        return np.array(sequences), np.array(targets)
 
-            # Stack the scaled features horizontally into a single array
-            scaled_data = np.hstack((
-                scaled_current_price,
-                scaled_funding,
-                scaled_open_interest,
-                scaled_premium,
-                scaled_day_ntl_vlm,
-                scaled_long_number,
-                scaled_short_number
-            ))
-
-            # Prepare sequences
-            train_data = self._prepare_data(scaled_data)
-        else:
-            # Input is already preprocessed numpy array
-            train_data = data
-
-        # Split into x and y
-        x_train, y_train = train_data[:-1], train_data[1:]
-
-        # Split data into training and validation sets
-        val_size = int(len(x_train) * self.config.validation_split)
-        x_train, x_val = x_train[:-val_size], x_train[-val_size:]
-        y_train, y_val = y_train[:-val_size], y_train[-val_size:]
-
-        # Convert to tensors with correct dimensions [batch_size, sequence_length, features]
-        x_train = torch.tensor(x_train, dtype=torch.float32)
-        y_train = torch.tensor(y_train[:, -1, 0], dtype=torch.float32).unsqueeze(-1)  # Only use close price for target
-        x_val = torch.tensor(x_val, dtype=torch.float32)
-        y_val = torch.tensor(y_val[:, -1, 0], dtype=torch.float32).unsqueeze(-1)
-
-        # Create DataLoader for mini-batching
-        train_dataset = TensorDataset(x_train, y_train)
-        train_loader = DataLoader(
-            train_dataset, batch_size=self.config.batch_size, shuffle=True
-        )
-
-        best_val_loss = float("inf")
-        patience_counter = 0
-
-        self.model.train()
-        for epoch in range(self.config.epochs):
-            epoch_loss = 0
-            for inputs, targets in train_loader:
-
-                outputs, _ = self.model(inputs)  # Get only the output
-                loss = self.criterion(outputs, targets)
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), max_norm=1.0
-                )  # Gradient clipping
-                self.optimizer.step()
-                epoch_loss += loss.item()
-
-            # Validation
-            self.model.eval()
-            with torch.no_grad():
-                val_outputs, _ = self.model(x_val)  # Get only the output
-                val_loss = self.criterion(val_outputs, y_val).item()
-            self.model.train()
-
-            if (epoch + 1) % 10 == 0:
-                print(
-                    f"Epoch [{epoch+1}/{self.config.epochs}], Training Loss: {epoch_loss:.4f}, Validation Loss: {val_loss:.4f}"
-                )
-
-            # Early stopping logic
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                patience_counter = 0
+    def train(self, data):
+        """Train the LSTM model with improved feature scaling"""
+        try:
+            # Handle both DataFrame and numpy array inputs
+            if isinstance(data, pd.DataFrame):
+                if "time" in data.columns:
+                    data["time"] = pd.to_datetime(data["time"])
+                    data = data.set_index("time")
+                data = data.resample(self.config.interval).mean().dropna()
+                scaled_data = self._scale_features(data)
             else:
-                patience_counter += 1
-                if patience_counter >= self.config.early_stopping_patience:
-                    print(f"Early stopping triggered at epoch {epoch + 1}")
-                    break
+                # If input is numpy array, assume it's already properly formatted
+                # and contains all required features in the correct order
+                scaled_data = np.array(data)
+                if scaled_data.ndim == 1:
+                    scaled_data = scaled_data.reshape(-1, 1)
+                
+                # Initialize and fit scalers if not already done
+                if not self.scalers:
+                    self._initialize_scalers()
+                    for i, feature in enumerate(self.feature_names):
+                        feature_data = scaled_data[:, i].reshape(-1, 1)
+                        self.scalers[feature].fit(feature_data)
+                
+                # Scale each feature
+                scaled_features = []
+                for i, feature in enumerate(self.feature_names):
+                    feature_data = scaled_data[:, i].reshape(-1, 1)
+                    scaled_values = self.scalers[feature].transform(feature_data)
+                    scaled_features.append(scaled_values)
+                scaled_data = np.hstack(scaled_features)
+            
+            # Create sequences
+            X, y = self._create_sequences(scaled_data, self.config.time_steps)
+            
+            # Convert to tensors
+            X = torch.FloatTensor(X)
+            y = torch.FloatTensor(y)
+            
+            # Create dataset and dataloader
+            dataset = TensorDataset(X, y)
+            dataloader = DataLoader(
+                dataset, 
+                batch_size=self.config.batch_size,
+                shuffle=True
+            )
+            
+            # Training loop
+            best_loss = float('inf')
+            patience_counter = 0
+            
+            for epoch in range(self.config.epochs):
+                self.model.train()
+                epoch_loss = 0
+                
+                for batch_X, batch_y in dataloader:
+                    self.optimizer.zero_grad()
+                    
+                    # Forward pass
+                    output, _ = self.model(batch_X)
+                    loss = self.criterion(output.squeeze(), batch_y)
 
-        # Save the model
-        self.save()
+                    # Backward pass
+                    loss.backward()
+                    
+                    # Gradient clipping
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), 
+                        max_norm=1.0
+                    )
+                    
+                    self.optimizer.step()
+                    epoch_loss += loss.item()
+                
+                avg_loss = epoch_loss / len(dataloader)
+                
+                if self.debug and (epoch + 1) % 10 == 0:
+                    print(f"Epoch [{epoch+1}/{self.config.epochs}], Loss: {avg_loss:.4f}")
+                
+                # Early stopping
+                if avg_loss < best_loss:
+                    best_loss = avg_loss
+                    patience_counter = 0
+                    # Save best model
+                    self.save()
+                    self._save_scalers()
+                else:
+                    patience_counter += 1
+                    if patience_counter >= self.config.early_stopping_patience:
+                        print(f"Early stopping triggered at epoch {epoch + 1}")
+                        break
+                        
+        except Exception as e:
+            print(f"Error during training: {str(e)}")
+            raise
 
-    # pylint: disable=too-many-branches,too-many-statements
     def inference(self, input_data: pd.DataFrame, time_steps=None) -> pd.DataFrame:
         self.model.eval()
 
@@ -348,111 +396,70 @@ class LstmModel(Model):
 
         return df_predictions
 
-    # pylint: disable=arguments-differ
     def forecast(self, steps: int, last_known_data: pd.DataFrame) -> pd.DataFrame:
-        """Forecast future values based on the last known data."""
-        self.model.eval()
-
-        # Initialize scalers for each feature
-        scaler_funding = MinMaxScaler(feature_range=(0, 1))
-        scaler_open_interest = MinMaxScaler(feature_range=(0, 1))
-        scaler_premium = MinMaxScaler(feature_range=(0, 1))
-        scaler_day_ntl_vlm = MinMaxScaler(feature_range=(0, 1))
-        scaler_current_price = MinMaxScaler(feature_range=(0, 1))
-        scaler_long_number = MinMaxScaler(feature_range=(0, 1))
-        scaler_short_number = MinMaxScaler(feature_range=(0, 1))
-
-        # Ensure 'date' column exists and set it as index for resampling
-        if "time" in last_known_data.columns:
-            last_known_data["time"] = pd.to_datetime(last_known_data["time"])
-            last_known_data = last_known_data.set_index("time")
-
-        # Resample based on the specified interval in the config
-        last_known_data = last_known_data.resample(self.config.interval).mean().dropna()
-        
-        # Ensure there is enough data to use for forecasting
-        if len(last_known_data) < self.config.time_steps:
-            raise ValueError(
-                f"Not enough data to generate a forecast. Required at least {self.config.time_steps} data points."
+        """Forecast future values with improved scaling"""
+        try:
+            self.model.eval()
+            self._load_scalers()  # Load saved scalers
+            
+            # Prepare input data
+            if "time" in last_known_data.columns:
+                last_known_data = last_known_data.set_index("time")
+            last_known_data = last_known_data.resample(self.config.interval).mean().dropna()
+            
+            # Scale features
+            scaled_data = self._scale_features(last_known_data)
+            
+            print(scaled_data)
+            
+            # Prepare last sequence
+            last_sequence = scaled_data[-self.config.time_steps:].reshape(
+                1, self.config.time_steps, len(self.feature_names)
             )
-
-        # Scale each feature
-        funding = last_known_data["funding"].values.astype(float).reshape(-1, 1)
-        open_interest = last_known_data["open_interest"].values.astype(float).reshape(-1, 1)
-        premium = last_known_data["premium"].values.astype(float).reshape(-1, 1)
-        day_ntl_vlm = last_known_data["day_ntl_vlm"].values.astype(float).reshape(-1, 1)
-        current_price = last_known_data["current_price"].values.astype(float).reshape(-1, 1)
-        long_number = last_known_data["long_number"].values.astype(float).reshape(-1, 1)
-        short_number = last_known_data["short_number"].values.astype(float).reshape(-1, 1)
-
-        # Scale each feature
-        scaled_funding = scaler_funding.fit_transform(funding)
-        scaled_open_interest = scaler_open_interest.fit_transform(open_interest)
-        scaled_premium = scaler_premium.fit_transform(premium)
-        scaled_day_ntl_vlm = scaler_day_ntl_vlm.fit_transform(day_ntl_vlm)
-        scaled_current_price = scaler_current_price.fit_transform(current_price)
-        scaled_long_number = scaler_long_number.fit_transform(long_number)
-        scaled_short_number = scaler_short_number.fit_transform(short_number)
-
-        # Stack the scaled features horizontally
-        scaled_data = np.hstack((
-            scaled_current_price,
-            scaled_funding,
-            scaled_open_interest,
-            scaled_premium,
-            scaled_day_ntl_vlm,
-            scaled_long_number,
-            scaled_short_number
-        ))
-
-        # Prepare the last sequence of data for forecasting
-        last_sequence = scaled_data[-self.config.time_steps:].reshape(1, self.config.time_steps, 7)
-        predictions = []
-        
-        with torch.no_grad():
-            for step in range(steps):
-                inputs = torch.tensor(last_sequence, dtype=torch.float32)
-                predicted_scaled, _ = self.model(inputs)  # Pass the inputs through the model
-                predicted_scaled = predicted_scaled.cpu().numpy()
-
-                # Inverse transform the predicted value (only for close price)
-                predicted = scaler_current_price.inverse_transform(predicted_scaled)
-                predictions.append(predicted.flatten()[0])
-
-                # Create next sequence input (shift window and append prediction)
-                # We'll repeat the last known values for other features
-                new_row = np.array([
-                    predicted_scaled[0, 0],  # current_price
-                    scaled_data[-1, 1],      # funding
-                    scaled_data[-1, 2],      # open_interest
-                    scaled_data[-1, 3],      # premium
-                    scaled_data[-1, 4],      # day_ntl_vlm
-                    scaled_data[-1, 5],      # long_number
-                    scaled_data[-1, 6],      # short_number
-                ]).reshape(1, -1)
-
-                last_sequence = np.concatenate([
-                    last_sequence[:, 1:, :],
-                    new_row.reshape(1, 1, 7)
-                ], axis=1)
-
-                if self.debug:
-                    print(f"Step {step + 1}/{steps}, Predicted: {predicted.flatten()[0]}")
-
-        # Create forecast dates
-        forecast_dates = pd.date_range(
-            start=last_known_data.index[-1],
-            periods=steps + 1,
-            freq=self.config.interval,
-        )[1:]  # Exclude the starting date
-
-        # Create a DataFrame for the forecasted values
-        df_forecast = pd.DataFrame({
-            "time": forecast_dates,
-            "prediction": predictions,
-        })
-
-        return df_forecast
+            
+            # Generate predictions
+            predictions = []
+            current_sequence = torch.FloatTensor(last_sequence)
+            
+            with torch.no_grad():
+                for _ in range(steps):
+                    output, _ = self.model(current_sequence)
+                    predicted_scaled = output.numpy()[0]
+                    
+                    # Inverse transform only the price prediction
+                    predicted_price = self.scalers['current_price'].inverse_transform(
+                        predicted_scaled.reshape(-1, 1)
+                    )[0][0]
+                    
+                    predictions.append(predicted_price)
+                    
+                    # Update sequence for next prediction
+                    new_row = np.copy(scaled_data[-1])  # Copy last known features
+                    new_row[0] = predicted_scaled  # Update only the price
+                    new_sequence = np.concatenate([
+                        current_sequence[0, 1:].numpy(),
+                        new_row.reshape(1, -1)
+                    ])
+                    current_sequence = torch.FloatTensor(new_sequence).unsqueeze(0)
+            
+            # Create forecast dates
+            forecast_dates = pd.date_range(
+                start=last_known_data.index[-1],
+                periods=steps + 1,
+                freq=self.config.interval
+            )[1:]
+            
+            # Create forecast DataFrame
+            forecast_df = pd.DataFrame({
+                'time': forecast_dates,
+                'prediction': predictions
+            })
+            
+            return forecast_df
+            
+        except Exception as e:
+            print(f"Error during forecasting: {str(e)}")
+            raise
 
     def _prepare_data(self, data, time_steps=None):
         """Prepare data into sequences for the LSTM."""

@@ -9,7 +9,8 @@ def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
     :return: Cleaned and validated data ready for training
     :raises: ValueError if validation fails
     """
-    required_columns = ["open", "high", "low", "volume", "close"]
+    required_columns = ['time', 'current_price', 'funding', 'open_interest', 'premium', 
+                    'day_ntl_vlm',  'long_number', 'short_number']
 
     # Check if all required columns are present
     missing_columns = [col for col in required_columns if col not in data.columns]
@@ -19,15 +20,9 @@ def preprocess_data(data: pd.DataFrame) -> pd.DataFrame:
     # Drop rows with missing values in required columns
     data = data.dropna(subset=required_columns)
     # print sample
-    print(data.head())
-
-    # Ensure all required columns have numeric data
-    for col in required_columns:
-        if not pd.api.types.is_numeric_dtype(data[col]):
-            raise ValueError(f"Column {col} contains non-numeric values.")
 
     # Optionally: You can normalize or scale the data here if needed
     # Example: data[required_columns] = (data[required_columns] - data[required_columns].mean()) / data[required_columns].std()
 
     print("Data validation and preprocessing completed successfully.")
-    return data
+    return data[required_columns]
