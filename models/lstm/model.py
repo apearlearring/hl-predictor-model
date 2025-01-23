@@ -14,39 +14,50 @@ from models.lstm.configs import LstmConfig
 
 # Define the LSTM architecture
 class LSTM(nn.Module):
-    """LSTM based model for time series forecasting"""
-
-    # pylint: disable=too-many-arguments
-    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout=0.5):
+    """Enhanced LSTM model for time series forecasting"""
+    def __init__(self, input_size, hidden_size, output_size, num_layers=2, dropout=0.2):
         super().__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
 
-        # Define the LSTM layers
-        self.lstm = nn.LSTM(
-            input_size, hidden_size, num_layers, batch_first=True, dropout=dropout
+        # Deeper LSTM with better regularization
+        self.lstm1 = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_layers=1,
+            batch_first=True,
+            dropout=0
         )
-        self.fc = nn.Linear(hidden_size, output_size)  # Fully connected layer
-        self.batch_norm = nn.BatchNorm1d(hidden_size)  # Batch normalization layer
-        self.dropout = nn.Dropout(dropout)  # Dropout layer for regularization
+        
+        self.lstm2 = nn.LSTM(
+            input_size=hidden_size,
+            hidden_size=hidden_size,
+            num_layers=1,
+            batch_first=True,
+            dropout=0
+        )
+        
+        # Improved prediction head
+        self.head = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_size // 2, output_size)
+        )
 
-    def forward(self, x, hidden_state=None):
-        # Initialize hidden and cell states if not provided
-        if hidden_state is None:
-            h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-            c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-            hidden_state = (h0, c0)
-
-        # Forward pass through LSTM
-        out, hidden_state = self.lstm(x, hidden_state)
-
-        # Apply batch normalization and dropout on the output
-        out = self.batch_norm(out[:, -1, :])  # Normalize across the last time step
-        out = self.dropout(out)
-
-        # Fully connected layer to map the hidden state to output
-        out = self.fc(out)
-        return out, hidden_state
+    def forward(self, x):
+        # First LSTM layer
+        lstm1_out, _ = self.lstm1(x)
+        
+        # Second LSTM layer
+        lstm2_out, _ = self.lstm2(lstm1_out)
+        
+        # Use only the last output for prediction
+        last_hidden = lstm2_out[:, -1, :]
+        
+        # Generate prediction
+        return self.head(last_hidden)
 
 
 # Define the LSTM model class that integrates with the base model
@@ -211,7 +222,7 @@ class LstmModel(Model):
                     self.optimizer.zero_grad()
                     
                     # Forward pass
-                    output, _ = self.model(batch_X)
+                    output = self.model(batch_X)
                     loss = self.criterion(output.squeeze(), batch_y)
 
                     # Backward pass
@@ -314,8 +325,8 @@ class LstmModel(Model):
                 for i in range(
                     len(input_data)
                 ):  # Predict for every day (or interval) in the input_data
-                    predicted_scaled, hidden_state = self.model(
-                        inputs[-1:], hidden_state
+                    predicted_scaled = self.model(
+                        inputs[-1:]
                     )  # Pass the hidden state
                     predictions.append(predicted_scaled.cpu().numpy()[0])
                     if self.debug:
@@ -342,8 +353,8 @@ class LstmModel(Model):
             # If we have more than one sequence, use the loop
             else:
                 for i in range(len(close_prices_scaled) - time_steps):
-                    predicted_scaled, hidden_state = self.model(
-                        inputs[-1:], hidden_state
+                    predicted_scaled = self.model(
+                        inputs[-1:]
                     )  # Pass the hidden state
                     predictions.append(predicted_scaled.cpu().numpy()[0])
                     if self.debug:
@@ -423,7 +434,7 @@ class LstmModel(Model):
             
             with torch.no_grad():
                 for _ in range(steps):
-                    output, _ = self.model(current_sequence)
+                    output = self.model(current_sequence)
                     predicted_scaled = output.numpy()[0]
                     
                     # Inverse transform only the price prediction
@@ -461,13 +472,31 @@ class LstmModel(Model):
             print(f"Error during forecasting: {str(e)}")
             raise
 
-    def _prepare_data(self, data, time_steps=None):
-        """Prepare data into sequences for the LSTM."""
-        if time_steps is None:
-            time_steps = self.config.time_steps
-        result = []
-        if len(data) <= time_steps:
-            time_steps = len(data) - 1
-        for i in range(time_steps, len(data)):
-            result.append(data[i - time_steps : i])
-        return np.array(result)
+# def _prepare_data(self, data: pd.DataFrame) -> np.ndarray:
+#     """Enhanced data preprocessing"""
+#     # Add technical indicators
+#     data = data.copy()
+    
+#     # Price momentum
+#     data['price_change'] = data['current_price'].pct_change()
+#     data['price_momentum'] = data['current_price'].pct_change(periods=5)
+    
+#     # Moving averages
+#     data['ma5'] = data['current_price'].rolling(window=5).mean()
+#     data['ma20'] = data['current_price'].rolling(window=20).mean()
+    
+#     # Volatility
+#     data['volatility'] = data['current_price'].rolling(window=10).std()
+    
+#     # Volume indicators
+#     data['volume_ma5'] = data['day_ntl_vlm'].rolling(window=5).mean()
+#     data['volume_momentum'] = data['day_ntl_vlm'].pct_change(periods=5)
+    
+#     # Market sentiment
+#     data['long_short_ratio'] = data['long_number'] / data['short_number']
+#     data['funding_ma5'] = data['funding'].rolling(window=5).mean()
+    
+#     # Fill NaN values
+#     data = data.fillna(method='ffill').fillna(method='bfill')
+    
+#     return data

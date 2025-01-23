@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+trained_models/
 *.py[cod]
 *$py.class
 *.so
