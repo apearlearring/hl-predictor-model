@@ -26,7 +26,7 @@ class LstmConfig:
         self.validation_split = 0.2  # Proportion of data used for validation
         self.time_steps = 60  # Number of time steps used for LSTM input
         self.interval = (
-            "D"  # Default to daily interval (e.g., 'D', '5M', 'H', 'W', 'M')
+            "5min"  # Default to daily interval (e.g., 'D', '5M', 'H', 'W', 'M')
         )
 
     def display(self):

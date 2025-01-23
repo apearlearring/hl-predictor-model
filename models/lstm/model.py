@@ -369,7 +369,7 @@ class LstmModel(Model):
 
         # Resample based on the specified interval in the config
         last_known_data = last_known_data.resample(self.config.interval).mean().dropna()
-
+        
         # Ensure there is enough data to use for forecasting
         if len(last_known_data) < self.config.time_steps:
             raise ValueError(
@@ -380,7 +380,7 @@ class LstmModel(Model):
         funding = last_known_data["funding"].values.astype(float).reshape(-1, 1)
         open_interest = last_known_data["open_interest"].values.astype(float).reshape(-1, 1)
         premium = last_known_data["premium"].values.astype(float).reshape(-1, 1)
-        day_ntl_vlm = last_known_data["volume"].values.astype(float).reshape(-1, 1)
+        day_ntl_vlm = last_known_data["day_ntl_vlm"].values.astype(float).reshape(-1, 1)
         current_price = last_known_data["current_price"].values.astype(float).reshape(-1, 1)
         long_number = last_known_data["long_number"].values.astype(float).reshape(-1, 1)
         short_number = last_known_data["short_number"].values.astype(float).reshape(-1, 1)
@@ -408,7 +408,7 @@ class LstmModel(Model):
         # Prepare the last sequence of data for forecasting
         last_sequence = scaled_data[-self.config.time_steps:].reshape(1, self.config.time_steps, 7)
         predictions = []
-
+        
         with torch.no_grad():
             for step in range(steps):
                 inputs = torch.tensor(last_sequence, dtype=torch.float32)
