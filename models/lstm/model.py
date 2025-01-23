@@ -449,7 +449,7 @@ class LstmModel(Model):
         # Create a DataFrame for the forecasted values
         df_forecast = pd.DataFrame({
             "time": forecast_dates,
-            "Forecasted Close": predictions,
+            "prediction": predictions,
         })
 
         return df_forecast

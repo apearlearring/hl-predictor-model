@@ -12,6 +12,8 @@ torch = "^2.5.1"
 scikit-learn = "^1.6.1"
 prophet = "^1.1.6"
 statsmodels = "^0.14.4"
+matplotlib = "^3.10.0"
+seaborn = "^0.13.2"
 
 [tool.poetry.dev-dependencies]
 
