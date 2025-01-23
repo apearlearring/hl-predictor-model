@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import argparse
+from typing import List
 
 # pylint: disable=no-name-in-module
 from configs import models
@@ -10,51 +12,44 @@ from models.model_factory import ModelFactory
 from utils.common import print_colored
 
 
-def select_data(file_path=None):
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train cryptocurrency prediction models')
+    parser.add_argument('--data', type=str, required=True,
+                       help='Path to the CSV file containing training data')
+    parser.add_argument('--models', type=str, default='all',
+                       help='Comma-separated list of model numbers to train, or "all" for all models')
+    return parser.parse_args()
 
-    print("You selected to load data from a csv file.")
-    if file_path is None:
-        file_path = input("Enter the csv file path: ").strip()
+def select_data(file_path: str):
+    print_colored(f"Loading data from: {file_path}", "info")
     return Loader.load_csv(file_path)
 
-
-def model_selection_input():
-    print("Select the models to train:")
-    print("1. All models")
-    print("2. Custom selection")
-
-    model_selection = input("Enter your choice (1/2): ").strip()
-
-    if model_selection == "1":
-        model_types = models
-    elif model_selection == "2":
-        available_models = {str(i + 1): model for i, model in enumerate(models)}
-        print("Available models to train:")
-        for key, value in available_models.items():
-            print(f"{key}. {value}")
-
-        selected_models = input(
-            "Enter the numbers of the models to train (e.g., 1,3,5): "
-        ).strip()
-        model_types = [
-            available_models[num.strip()]
-            for num in selected_models.split(",")
-            if num.strip() in available_models
-        ]
-    else:
-        print_colored("Invalid choice, defaulting to all models.", "error")
-        model_types = models
-
-    return model_types
+def get_selected_models(model_arg: str) -> List[str]:
+    available_models = {str(i + 1): model for i, model in enumerate(models)}
+    
+    if model_arg.lower() == 'all':
+        return list(models)
+    
+    selected_models = []
+    for num in model_arg.split(','):
+        num = num.strip()
+        if num in available_models:
+            selected_models.append(available_models[num])
+        else:
+            print_colored(f"Warning: Invalid model number {num}, skipping", "warning")
+    
+    if not selected_models:
+        print_colored("No valid models selected, defaulting to all models.", "warning")
+        return list(models)
+    
+    return selected_models
 
 def main():
-
-    # Select data dynamically based on user input
-    data = select_data("data/sets/BTC_metrics.csv")  # example testing defaults , "4", "data/sets/eth.csv"
-
-
-    data = preprocess_data(data) 
+    args = parse_args()
     
+    # Load data from specified file path
+    data = select_data(args.data)
+    data = preprocess_data(data)
     
     # Convert date column to datetime if it's not already
     if 'time' in data.columns:
@@ -63,17 +58,16 @@ def main():
     # Initialize ModelFactory
     factory = ModelFactory()
 
-    # Select models to train
-    model_types = model_selection_input()
+    # Get selected models from command line arguments
+    model_types = get_selected_models(args.models)
 
     # Train and save the selected models
     for model_type in model_types:
-        print(f"Training {model_type} model...")
+        print_colored(f"Training {model_type} model...", "info")
         model = factory.create_model(model_type)
         model.train(data)
 
     print_colored("Model training and saving complete!", "success")
-
 
 if __name__ == "__main__":
     main()
