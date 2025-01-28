@@ -12,6 +12,7 @@ class ProphetConfig:
         # Prophet model configuration
         self.growth = "linear"  # Changed from "logistic" to "linear"
         self.changepoint_prior_scale = 0.05
+        self.interval = "5min"
         self.yearly_seasonality = False
         self.weekly_seasonality = False
         self.daily_seasonality = True

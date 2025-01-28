@@ -1,8 +1,39 @@
+import os
 import pandas as pd
 from prophet import Prophet
 
 from models.base_model import Model
 from models.prophet.configs import ProphetConfig
+
+class suppress_stdout_stderr(object):
+    """
+    A context manager for doing a "deep suppression" of stdout and stderr in
+    Python, i.e. will suppress all print, even if the print originates in a
+    compiled C/Fortran sub-function.
+       This will not suppress raised exceptions, since exceptions are printed
+    to stderr just before a script exits, and after the context manager has
+    exited (at least, I think that is why it lets exceptions through).
+
+    """
+
+    def __init__(self):
+        # Open a pair of null files
+        self.null_fds = [os.open(os.devnull, os.O_RDWR) for x in range(2)]
+        # Save the actual stdout (1) and stderr (2) file descriptors.
+        self.save_fds = [os.dup(1), os.dup(2)]
+
+    def __enter__(self):
+        # Assign the null pointers to stdout and stderr.
+        os.dup2(self.null_fds[0], 1)
+        os.dup2(self.null_fds[1], 2)
+
+    def __exit__(self, *_):
+        # Re-assign the real stdout/stderr back to (1) and (2)
+        os.dup2(self.save_fds[0], 1)
+        os.dup2(self.save_fds[1], 2)
+        # Close the null files
+        for fd in self.null_fds + self.save_fds:
+            os.close(fd)
 
 
 class ProphetModel(Model):
@@ -33,6 +64,8 @@ class ProphetModel(Model):
 
         df = df.rename(columns={"time": "ds", "current_price": "y"})
 
+        print(len(df))
+
         # Handle logistic growth: Set 'cap' and 'floor' values
         if self.config.growth == "logistic":
             max_y = df["y"].max()
@@ -49,55 +82,49 @@ class ProphetModel(Model):
 
         self.save()
 
-    def inference(self, input_data: pd.DataFrame) -> pd.DataFrame:
-        if self.debug:
-            print("Input Data for ProphetModel before predictions:")
-            print(input_data)
-
-        # Ensure the 'date' column exists in the input data before proceeding
-        if "time" not in input_data.columns:
-            raise KeyError(
-                "The input_data must contain a 'date' column for Prophet predictions."
-            )
-
-        # Rename 'date' to 'ds' for Prophet
-        future = input_data[["time"]].rename(columns={"time": "ds"}).copy()
-
-        if self.config.remove_timezone:
-            future["ds"] = pd.to_datetime(future["ds"]).dt.tz_localize(None)
-
-        # Handle logistic growth: Ensure 'cap' and 'floor' columns are present
-        if self.config.growth == "logistic":
-            if "cap" not in input_data.columns:
-                # Dynamically set 'cap' if missing (assuming similar logic as training)
-                future["cap"] = (
-                    input_data["current_price"].max() * 1.1
-                )  # Example logic for setting 'cap'
+    def forecast(self, steps: int, last_known_data: pd.DataFrame) -> pd.DataFrame:
+        
+        try: 
+            if len(last_known_data) <= 30:
+                return None
+            
+            price_df = last_known_data[['time', 'current_price']]
+            price_df.rename(columns = {'time': 'ds', 'current_price': 'y'}, inplace = True)
+            price_df = price_df.sort_values(by = 'ds')
+            
+            with suppress_stdout_stderr():
                 
-                self.cap = future['cap']
+                model = Prophet()        
+                
+                model.fit(price_df)
+                
+            data_forecast = model.make_future_dataframe(periods=steps, include_history=False, freq='5min')
+            
+            forecast = model.predict(data_forecast)
+            
+            forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+            
+            forecast.sort_values("ds", inplace=True)
+            forecast.reset_index(inplace=True, drop=True)
+            
+            forecast = forecast.rename(
+                columns={
+                    "ds": "time",
+                    "yhat": "forecast",
+                    "yhat_lower": "forecast_lower",
+                    "yhat_upper": "forecast_upper",
+                }
+            )
+            
+            forecast = forecast[["time", "forecast", "forecast_lower", "forecast_upper"]]
+            forecast.time = pd.to_datetime(forecast.time)
+            forecast = forecast.set_index('time')
+            
+            return forecast
+    
+        except Exception as e:
+            print(f"Error in ARIMA forecast: {str(e)}")
+            raise
 
-            if "floor" not in input_data.columns:
-                # Set the 'floor' if it's missing (e.g., default to 0)
-                future["floor"] = 0
-
-        if self.debug:
-            print("Future DataFrame for ProphetModel (after renaming):")
-            print(future)
-
-        # Perform the forecast using Prophet
-        forecast = self.model.predict(future, False)
-        if self.debug:
-            print("Forecast Output:")
-            print(forecast[["ds", "yhat"]])
-
-        return pd.DataFrame({"time": forecast["ds"], "prediction": forecast["yhat"]})
-
-    def forecast(self, steps: int) -> pd.DataFrame:
-        print(steps)
-        future_dates = self.model.make_future_dataframe(periods=12, freq="5min")
-        future_dates['floor'] = 0  # Adjust as needed
-        future_dates['cap'] = self.cap  # Set to your defined cap value if applicable
-        print("future_dates")
-        print(future_dates)
-        forecast = self.model.predict(future_dates)
-        return forecast[["ds", "yhat"]].tail(steps)
+            
+        

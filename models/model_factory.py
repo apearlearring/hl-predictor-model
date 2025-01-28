@@ -1,15 +1,13 @@
 import importlib
 
 from utils.common import print_colored, snake_to_camel
-from utils.model_commons import set_seed
 
 
 class ModelFactory:
     """Factory class to dynamically create and manage machine learning models."""
 
-    def __init__(self, seed=42):
+    def __init__(self):
         """Initialize the factory with a default random seed for reproducibility."""
-        set_seed(seed)
         self.models_dir = "models"
 
     def create_model(self, model_name: str):

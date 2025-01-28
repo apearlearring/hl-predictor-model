@@ -10,16 +10,20 @@ class LstmConfig:
 
     def __init__(self):
         # Model architecture parameters
-        self.input_size = 7  # Input size (number of features)
-        self.hidden_size = 64  # Number of LSTM units per layer
+        self.features = 7  # Input size (number of features)
+        self.n_steps_out = 24  # Number of time steps used for LSTM output
+        self.hidden_size = 100  # Number of LSTM units per layer
+        self.hidden_size2 = 50  # Number of LSTM units per layer
         self.output_size = 1  # Output size (prediction dimension)
         self.num_layers = 2  # Number of stacked LSTM layers
         self.dropout = 0.5  # Dropout probability for regularization
+        self.optimizer = "adam"
+        self.loss = "mse"
 
         # Training parameters
         self.learning_rate = 0.0001  # Learning rate for the optimizer
         self.batch_size = 32  # Batch size for training
-        self.epochs = 300  # Number of training epochs
+        self.epochs = 1  # Number of training epochs
         self.early_stopping_patience = 10  # Early stopping patience in epochs
 
         # Data processing
@@ -32,7 +36,7 @@ class LstmConfig:
     def display(self):
         """Prints out the current configuration."""
         print("LSTM Configuration:")
-        print(f"  Input Size: {self.input_size}")
+        print(f"  Input Size: {self.features}")
         print(f"  Hidden Size: {self.hidden_size}")
         print(f"  Output Size: {self.output_size}")
         print(f"  Num Layers: {self.num_layers}")

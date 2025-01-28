@@ -5,9 +5,25 @@ from statsmodels.tsa.stattools import adfuller
 
 
 def adf_test(series):
-    """Perform ADF test to check stationarity"""
-    result = adfuller(series)
-    return result[1]  # return p-value
+    """
+    Perform Augmented Dickey-Fuller test with proper data validation
+    """
+    try:
+        # Ensure series is clean before testing
+        series = series.replace([np.inf, -np.inf], np.nan)
+        series = series.interpolate(method='linear')
+        series = series.dropna()
+        
+        if len(series) < 20:  # Minimum length for meaningful test
+            print("Warning: Series too short for reliable ADF test")
+            return 1.0  # Return value indicating non-stationarity
+            
+        result = adfuller(series, maxlag=None)
+        return result[1]  # Return p-value
+        
+    except Exception as e:
+        print(f"Warning: ADF test failed - {str(e)}")
+        return 1.0  # Return value indicating non-stationarity
 
 
 def differencing(series):

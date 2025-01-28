@@ -8,16 +8,17 @@ class ArimaConfig:
     grid search, and training options.
     """
 
-    def __init__(self, use_grid_search=True, interval="5min"):
+    def __init__(self, use_grid_search=False, interval="5min"):
         # Model parameters (p, d, q) - for manual configuration
-        self.best_params = (1, 1, 0)
+        self.best_params = (5, 1, 1)
 
         # Grid Search Configuration
         self.use_grid_search = use_grid_search  # Toggle grid search
         self.p_values = [0, 1]  # Candidate values for p in ARIMA(p, d, q)
         self.d_values = [0, 1]  # Candidate values for d in ARIMA(p, d, q)
         self.q_values = [0, 1, 2]  # Candidate values for q in ARIMA(p, d, q)
-
+        self.alpha = .2
+    
         # Model training options
         self.max_iter = 100  # Maximum number of iterations for model fitting
 
