@@ -53,34 +53,7 @@ class ProphetModel(Model):
         )
 
     def train(self, data: pd.DataFrame):
-        df = data[["time", "current_price"]].copy()
-        df["time"] = pd.to_datetime(df["time"], errors="coerce")
-
-        # Drop rows with NaN values in 'date' or 'close'
-        df = df.dropna(subset=["time", "current_price"])
-
-        if self.config.remove_timezone:
-            df["time"] = df["time"].dt.tz_localize(None)
-
-        df = df.rename(columns={"time": "ds", "current_price": "y"})
-
-        print(len(df))
-
-        # Handle logistic growth: Set 'cap' and 'floor' values
-        if self.config.growth == "logistic":
-            max_y = df["y"].max()
-            df["cap"] = max_y * 1.1  # Set cap to 10% above max value
-            df["floor"] = 0  # Set a floor to prevent negative growth
-
-        if self.debug:
-            # Print data to check for NaNs or extreme values
-            print(df.isna().sum())
-            print(df.describe())
-
-        # Fit model
-        self.model.fit(df, iter=20000)
-
-        self.save()
+        print("training")
 
     def forecast(self, steps: int, last_known_data: pd.DataFrame) -> pd.DataFrame:
         
@@ -88,42 +61,46 @@ class ProphetModel(Model):
             if len(last_known_data) <= 30:
                 return None
             
-            price_df = last_known_data[['time', 'current_price']]
-            price_df.rename(columns = {'time': 'ds', 'current_price': 'y'}, inplace = True)
-            price_df = price_df.sort_values(by = 'ds')
+            # Create a copy of the required columns
+            price_df = pd.DataFrame({
+                'ds': pd.to_datetime(last_known_data['time']),
+                'y': last_known_data['current_price'].values
+            })
+            
+            price_df = price_df.sort_values(by='ds')
             
             with suppress_stdout_stderr():
-                
-                model = Prophet()        
+                model = Prophet(
+                    # interval_width=0.95,
+                    growth='linear', yearly_seasonality=False, daily_seasonality=False, weekly_seasonality=False
+                )
                 
                 model.fit(price_df)
                 
-            data_forecast = model.make_future_dataframe(periods=steps, include_history=False, freq='5min')
+            data_forecast = model.make_future_dataframe(
+                periods=steps,
+                include_history=False,
+                freq='5min'
+            )
             
             forecast = model.predict(data_forecast)
             
-            forecast = forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].copy()
+            # Select and rename columns
+            forecast_df = pd.DataFrame({
+                'time': forecast['ds'],
+                'forecast': forecast['yhat'],
+                'forecast_lower': forecast['yhat_lower'],
+                'forecast_upper': forecast['yhat_upper']
+            })
             
-            forecast.sort_values("ds", inplace=True)
-            forecast.reset_index(inplace=True, drop=True)
+            # Set index and sort
+            forecast_df = forecast_df.set_index('time')
+            forecast_df = forecast_df.sort_index()
             
-            forecast = forecast.rename(
-                columns={
-                    "ds": "time",
-                    "yhat": "forecast",
-                    "yhat_lower": "forecast_lower",
-                    "yhat_upper": "forecast_upper",
-                }
-            )
-            
-            forecast = forecast[["time", "forecast", "forecast_lower", "forecast_upper"]]
-            forecast.time = pd.to_datetime(forecast.time)
-            forecast = forecast.set_index('time')
-            
-            return forecast
+            return forecast_df
     
         except Exception as e:
-            print(f"Error in ARIMA forecast: {str(e)}")
+            print(f"Error in Prophet forecast: {str(e)}")
             raise
 
             

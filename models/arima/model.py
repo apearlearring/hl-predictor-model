@@ -35,6 +35,9 @@ class ArimaModel(Model):
         if len(data) < self.MIN_DATA_POINTS:
             raise ValueError(f"Insufficient data points. Minimum required: {self.MIN_DATA_POINTS}")
     
+    def train(self, data: pd.DataFrame):
+        print("training")
+    
     def _prepare_time_series(self, data: pd.DataFrame) -> pd.Series:
         """
         Prepare time series data for ARIMA model
@@ -95,32 +98,11 @@ class ArimaModel(Model):
         """Generate forecast and confidence intervals"""
         forecast_result = model_fit.get_forecast(steps=steps)
         
-        # Create forecast dates
-        forecast_dates = pd.date_range(
-            start=start_time + pd.Timedelta(minutes=5),
-            periods=steps,
-            freq=self.FREQ
-        )
-        
         # Get predictions and confidence intervals
         predictions = forecast_result.predicted_mean
         conf_int = forecast_result.conf_int(alpha=self.config.alpha)
         
         return predictions, conf_int
-    
-    def train(self, data: pd.DataFrame) -> None:
-        """Train ARIMA model on the price data"""
-        try:
-            prices = self._prepare_time_series(data)
-            print(f"Training on {len(prices)} data points")
-            
-            self._fit_model(prices)
-            self.save()
-            print("Model training completed successfully")
-            
-        except Exception as e:
-            print(f"Error in ARIMA training: {str(e)}")
-            raise
     
     def forecast(self, steps: int, last_known_data: pd.DataFrame) -> Optional[pd.DataFrame]:
         """Generate forecasts from the last known data point"""

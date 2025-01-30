@@ -21,10 +21,12 @@ def plot_forecasts(historical_data: pd.DataFrame, forecasts: dict):
     try:
         plt.figure(figsize=(15, 7))
 
+        # Create a copy of historical data
+        hist_data = historical_data.copy()
+        hist_data['time'] = pd.to_datetime(hist_data['time'])
+        
         # Plot historical data
-        historical_data['time'] = pd.to_datetime(historical_data['time'])
-        historical_data.set_index('time')
-        plt.plot(historical_data['time'][-100:], historical_data['current_price'][-100:], 
+        plt.plot(hist_data['time'][-100:], hist_data['current_price'][-100:], 
                 label='Historical', color='blue', alpha=0.7)
         
         # Plot forecasts with different colors
@@ -51,7 +53,7 @@ def plot_forecasts(historical_data: pd.DataFrame, forecasts: dict):
         
     except Exception as e:
         print_colored(f"Error plotting comparison: {str(e)}", "error")
-        raise  # Re-raise the exception to see the full error message
+        raise
     finally:
         plt.close()
 
@@ -74,12 +76,14 @@ def get_historical_data(data: pd.DataFrame, start_time: str = None, lookback: in
     """Get historical data with optional start time filtering"""
     required_features = ['time', 'current_price', 'funding', 'open_interest', 
                         'premium', 'day_ntl_vlm', 'long_number', 'short_number']
-    df = data[required_features]
+    
+    # Create a copy of the data to avoid the warning
+    df = data[required_features].copy()
     
     if start_time:
         df['time'] = pd.to_datetime(df['time'])
-        mask = df['time'] <= pd.to_datetime(start_time) + pd.Timedelta(minutes=5 * steps)
-        df = df[mask]
+        # Use .loc for proper indexing
+        df = df.loc[df['time'] <= pd.to_datetime(start_time) + pd.Timedelta(minutes=5 * steps)]
     
     return df.tail(lookback)
 
@@ -88,10 +92,18 @@ def main():
     try:
         args = parse_args()
         data = pd.read_csv(args.data)
-        historical_data = get_historical_data(data = data, start_time = args.start_time, steps = args.steps)
+        
+        # Get historical data
+        historical_data = get_historical_data(
+            data=data, 
+            start_time=args.start_time, 
+            steps=args.steps
+        )
+        
         print_colored(f"Using historical data from {historical_data['time'].min()} "
                      f"to {historical_data['time'].max()}", "info")
         print_colored(f"Forecasting {args.steps} steps ahead", "info")
+        
         # Generate forecasts
         forecasts = {}
         factory = ModelFactory()
@@ -100,11 +112,13 @@ def main():
             try:
                 print_colored(f"Forecasting using {model_type} model...", "info")
                 model = factory.create_model(model_type)
-                model.load()
+                
+                # Create a copy of the data for forecasting
+                forecast_data = historical_data.iloc[:-args.steps].copy()
                 
                 forecast = model.forecast(
                     steps=args.steps, 
-                    last_known_data=historical_data.iloc[:-args.steps]
+                    last_known_data=forecast_data
                 )
                 
                 if forecast is not None:
@@ -113,18 +127,23 @@ def main():
             except Exception as e:
                 print_colored(f"Error with {model_type} model: {str(e)}", "error")
         
+        # Calculate weighted ensemble if all models are available
         weights = [0.4, 0.1, 0.5]
-        
-        # Create a DataFrame with all forecasts aligned
         combined_df = pd.DataFrame()
+        
         for model_name in ["arima", "prophet", "lstm"]:
             if model_name in forecasts:
                 combined_df[model_name] = forecasts[model_name]["forecast"]
         
-        # Calculate weighted average only if we have all required models
-        if len(combined_df.columns) == 3:  # All three models present
+        if len(combined_df.columns) == 3:
             combined_forecasts = np.average(combined_df, weights=weights, axis=1)
-            forecasts['combined'] = pd.DataFrame({'forecast': combined_forecasts}, index=combined_df.index)
+            forecasts['combined'] = pd.DataFrame(
+                {'forecast': combined_forecasts}, 
+                index=combined_df.index
+            )
+            
+        if forecasts:
+            plot_forecasts(historical_data, forecasts)
             
         if forecasts:
             plot_forecasts(historical_data, forecasts)

@@ -1,4 +1,5 @@
 # Python
+forecasts/
 __pycache__/
 trained_models/
 *.py[cod]
@@ -48,7 +49,6 @@ poetry.lock
 *.h5
 *.pkl
 *.model
-models/
 logs/
 tensorboard/
 runs/

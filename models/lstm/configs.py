@@ -2,6 +2,9 @@
 
 
 # pylint: disable=too-many-instance-attributes
+from tensorflow.keras.losses import MeanSquaredError
+from tensorflow.keras.optimizers import Adam
+
 class LstmConfig:
     """
     Configuration class for the LSTM model. This stores settings for model parameters,
@@ -12,13 +15,13 @@ class LstmConfig:
         # Model architecture parameters
         self.features = 7  # Input size (number of features)
         self.n_steps_out = 24  # Number of time steps used for LSTM output
-        self.hidden_size = 100  # Number of LSTM units per layer
-        self.hidden_size2 = 50  # Number of LSTM units per layer
+        self.hidden_size = 64  # Number of LSTM units per layer
+        self.hidden_size2 = 32  # Number of LSTM units per layer
         self.output_size = 1  # Output size (prediction dimension)
         self.num_layers = 2  # Number of stacked LSTM layers
         self.dropout = 0.5  # Dropout probability for regularization
-        self.optimizer = "adam"
-        self.loss = "mse"
+        self.optimizer = Adam(learning_rate=0.001)
+        self.loss = MeanSquaredError()
 
         # Training parameters
         self.learning_rate = 0.0001  # Learning rate for the optimizer
@@ -29,9 +32,10 @@ class LstmConfig:
         # Data processing
         self.validation_split = 0.2  # Proportion of data used for validation
         self.time_steps = 60  # Number of time steps used for LSTM input
-        self.interval = (
-            "5min"  # Default to daily interval (e.g., 'D', '5M', 'H', 'W', 'M')
-        )
+        self.interval = '5T'  # Default to daily interval (e.g., 'D', '5M', 'H', 'W', 'M')
+        self.window = 24
+        self.simulations = 10
+        self.conf_int = 0.8
 
     def display(self):
         """Prints out the current configuration."""

@@ -32,13 +32,8 @@ class Model(ABC):
             )
 
     @abstractmethod
-    def train(self, data: pd.DataFrame):
-        """Train the model on the financial data."""
-
-    @abstractmethod
     def forecast(self, steps: int) -> pd.DataFrame:
         """Forecast the future steps based on the trained model."""
-
 
     def load(self):
         """Load the model and scaler (if applicable) from disk."""
