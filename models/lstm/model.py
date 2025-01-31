@@ -4,9 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler
-from tensorflow.keras.models import Sequential, load_model
-from tensorflow.keras.layers import Dense, LSTM, Dropout, Lambda, Input
-from tensorflow.keras.losses import MeanSquaredError
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM,  Lambda
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import matplotlib.pyplot as plt
@@ -46,23 +45,21 @@ class LstmModel(Model):
 
     def _build_model(self):
         """Build LSTM model architecture with proper input shape"""
-        model = Sequential([
-            # Specify input shape using Input layer
-            Input(shape=(self.config.time_steps, self.config.features)),
-            
-            # First LSTM layer
-            LSTM(units=self.config.hidden_size,
-                 return_sequences=True),
-            PermaDropout(self.config.dropout),
-            
-            # Second LSTM layer
-            LSTM(units=self.config.hidden_size2,
-                 return_sequences=False),
-            PermaDropout(self.config.dropout),
-            
-            # Output layer
-            Dense(units=self.config.output_size)
-        ])
+        model = Sequential()
+        
+        # First LSTM layer
+        model.add(LSTM(units=self.config.hidden_size,
+                      return_sequences=True,
+                      input_shape=(self.config.time_steps, self.config.features)))
+        model.add(PermaDropout(self.config.dropout))
+        
+        # Second LSTM layer
+        model.add(LSTM(units=self.config.hidden_size2,
+                      return_sequences=False))
+        model.add(PermaDropout(self.config.dropout))
+        
+        # Output layer
+        model.add(Dense(units=self.config.output_size))
         
         # Compile model
         model.compile(optimizer=self.config.optimizer,
@@ -74,41 +71,6 @@ class LstmModel(Model):
         """Initialize scalers for each feature"""
         for feature in self.feature_names:
             self.scalers[feature] = RobustScaler() if feature in ['percent_change', 'day_ntl_vlm'] else StandardScaler()
-
-    def _save_scalers(self):
-        """Save scalers to disk"""
-        scaler_dir = Path('trained_models') / self.model_name / 'scalers'
-        scaler_dir.mkdir(parents=True, exist_ok=True)
-        
-        for feature, scaler in self.scalers.items():
-            scaler_path = scaler_dir / f'{feature}_scaler.pkl'
-            joblib.dump(scaler, scaler_path)
-
-    def _save(self):
-        """Save the model and scaler (if applicable) to disk."""
-        os.makedirs(self.save_dir, exist_ok=True)
-        model_dir = os.path.join(self.save_dir, self.model_name)
-        os.makedirs(model_dir, exist_ok=True)
-
-        # Save the model (joblib or pickle) and scaler (if applicable)
-        self.model.save(os.path.join(model_dir, "model.h5"))
-        joblib.dump(self.scalers, os.path.join(model_dir, "scalers.pkl"))
-        if self.debug:
-            print_colored(
-                f"Model and scaler saved as {model_dir}/model.h5 and {model_dir}/scalers.pkl",
-                "success",
-            )
-
-    def _load_scalers(self):
-        """Load scalers from disk"""
-        scaler_dir = Path('trained_models') / self.model_name / 'scalers'
-        
-        for feature in self.feature_names:
-            scaler_path = scaler_dir / f'{feature}_scaler.pkl'
-            if scaler_path.exists():
-                self.scalers[feature] = joblib.load(scaler_path)
-            else:
-                raise FileNotFoundError(f"Scaler not found for feature: {feature}")
 
     def _scale_features(self, data: pd.DataFrame) -> np.ndarray:
         """
@@ -130,7 +92,7 @@ class LstmModel(Model):
                 self.scalers[feature].fit(values)
             scaled_features.append(self.scalers[feature].transform(values))
         
-        self._save_scalers()
+        # self._save_scalers()
         return np.hstack(scaled_features)
 
     def _create_sequences(self, scaled_data: np.ndarray, 
@@ -163,6 +125,62 @@ class LstmModel(Model):
         plt.legend(['train', 'val'], loc='upper left')
         plt.show()
 
+    def _prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Prepare data for training/forecasting"""
+        if "time" in data.columns:
+            data = data.set_index("time")
+        data = data.resample(self.config.interval).mean().dropna()
+        data['percent_change'] = data['current_price'].pct_change(self.config.window)
+        return data.dropna()
+
+    def _save(self):
+        """Save the model and scaler (if applicable) to disk."""
+        os.makedirs(self.save_dir, exist_ok=True)
+        model_dir = os.path.join(self.save_dir, self.model_name)
+        os.makedirs(model_dir, exist_ok=True)
+
+        # Save the model (joblib or pickle) and scaler (if applicable)
+        # self.model.save(os.path.join(model_dir, "model.h5"))
+        joblib.dump(self.scalers, os.path.join(model_dir, "scalers.pkl"))
+        if self.debug:
+            print_colored(
+                f"Model and scaler saved as {model_dir}/model.h5 and {model_dir}/scalers.pkl",
+                "success",
+            )
+            
+    def _load(self):
+        """Load model and scalers"""
+        try:
+            model_dir = Path(f'trained_models/{self.model_name}')
+            
+            # Instead of loading the model directly, load its weights
+            model_path = model_dir / 'model.weights.h5'
+            if not model_path.exists():
+                raise FileNotFoundError("Model file not found")
+            
+            # Create a new model with the same architecture
+            self.model = self._build_model()
+            optimizer = tf.keras.optimizers.Adam(learning_rate=self.config.learning_rate)
+            self.model.compile(
+                optimizer=optimizer,
+                loss=self.config.loss
+            )
+            # Load the weights
+            self.model.load_weights(model_path)
+            
+            # Load scalers
+            scalers_path = model_dir / 'scalers.pkl'
+            if scalers_path.exists():
+                self.scalers = joblib.load(scalers_path)
+            else:
+                raise FileNotFoundError("Scalers file not found")
+                
+            print_colored(f"Model and scalers loaded from {model_dir}", "success")
+            
+        except Exception as e:
+            print_colored(f"Error loading model: {str(e)}", "error")
+            raise
+
     def train(self, data: pd.DataFrame) -> None:
         """Train the LSTM model"""
         try:
@@ -175,9 +193,10 @@ class LstmModel(Model):
             callbacks = [
                 EarlyStopping(monitor='val_loss', patience=10, mode='min'),
                 ModelCheckpoint(
-                    f'trained_models/{self.model_name}/best_model.h5',
+                    f'trained_models/{self.model_name}/model.weights.h5',
                     save_best_only=True,
-                    monitor='val_loss'
+                    monitor='val_loss',
+                    save_weights_only=True
                 )
             ]
             
@@ -199,16 +218,16 @@ class LstmModel(Model):
     def forecast(self, steps: int, last_known_data: pd.DataFrame) -> pd.DataFrame:
         """Generate forecasts"""
         try:
+            self._load()
             data = self._prepare_data(last_known_data)
             scaled_data = self._scale_features(data[-self.config.time_steps:])
-            
             sequence = scaled_data.reshape(1, self.config.time_steps, len(self.feature_names))
 
             prices = last_known_data['current_price'].values[-self.config.window:(len(last_known_data) - (self.config.window - steps))]
             
             predictions = []
             for i in range(self.config.simulations):
-                pred = self.model.predict(sequence)
+                pred = self.model.predict(sequence, verbose=0)
                 pred = self.scalers['percent_change'].inverse_transform(pred)
                 pred = prices * (pred + 1)
                 predictions.append(pd.DataFrame(pred))
@@ -248,44 +267,3 @@ class LstmModel(Model):
         except Exception as e:
             print_colored(f"Forecasting error: {str(e)}", "error")
             raise
-
-    def _prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        """Prepare data for training/forecasting"""
-        if "time" in data.columns:
-            data = data.set_index("time")
-        data = data.resample(self.config.interval).mean().dropna()
-        data['percent_change'] = data['current_price'].pct_change(self.config.window)
-        return data.dropna()
-
-    def _save_model_and_scalers(self):
-        """Save model and scalers"""
-        save_dir = Path(f'trained_models/{self.model_name}')
-        save_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.model.save(save_dir / 'model.h5')
-        joblib.dump(self.scalers, save_dir / 'scalers.pkl')
-
-    def load(self):
-        """Load model and scalers"""
-        try:
-            model_dir = Path(f'trained_models/{self.model_name}')
-            
-            # Load model with custom_objects to handle the loss function
-            self.model = load_model(
-                model_dir / 'model.h5',
-                custom_objects={'loss': MeanSquaredError()}
-            )
-            
-            # Load scalers
-            scalers_path = model_dir / 'scalers.pkl'
-            if scalers_path.exists():
-                self.scalers = joblib.load(scalers_path)
-            else:
-                raise FileNotFoundError("Scalers file not found")
-                
-            print_colored(f"Model and scalers loaded from {model_dir}", "success")
-            
-        except Exception as e:
-            print_colored(f"Error loading model: {str(e)}", "error")
-            raise
-

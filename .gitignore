@@ -1,5 +1,6 @@
 # Python
 forecasts/
+metrics/
 __pycache__/
 trained_models/
 *.py[cod]
@@ -31,8 +32,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# Poetry
-poetry.lock
 
 # IDE
 .idea/
@@ -55,7 +54,6 @@ runs/
 wandb/
 
 # Project specific
-data/
 .cache/
 .pytest_cache/
 .coverage

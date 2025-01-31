@@ -43,17 +43,6 @@ class ProphetModel(Model):
         super().__init__(model_name=model_name, debug=debug)
         self.config = config  # Use the configuration class
         self.cap = None
-        self.model = Prophet(
-            growth=self.config.growth,
-            changepoint_prior_scale=self.config.changepoint_prior_scale,
-            yearly_seasonality=self.config.yearly_seasonality,  # type: ignore
-            weekly_seasonality=self.config.weekly_seasonality,  # type: ignore
-            daily_seasonality=self.config.daily_seasonality,  # type: ignore
-            seasonality_mode=self.config.seasonality_mode,
-        )
-
-    def train(self, data: pd.DataFrame):
-        print("training")
 
     def forecast(self, steps: int, last_known_data: pd.DataFrame) -> pd.DataFrame:
         
@@ -71,8 +60,12 @@ class ProphetModel(Model):
             
             with suppress_stdout_stderr():
                 model = Prophet(
-                    # interval_width=0.95,
-                    growth='linear', yearly_seasonality=False, daily_seasonality=False, weekly_seasonality=False
+                    growth=self.config.growth,
+                    changepoint_prior_scale=self.config.changepoint_prior_scale,
+                    yearly_seasonality=self.config.yearly_seasonality,  # type: ignore
+                    weekly_seasonality=self.config.weekly_seasonality,  # type: ignore
+                    daily_seasonality=self.config.daily_seasonality,  # type: ignore
+                    seasonality_mode=self.config.seasonality_mode,
                 )
                 
                 model.fit(price_df)
@@ -102,6 +95,3 @@ class ProphetModel(Model):
         except Exception as e:
             print(f"Error in Prophet forecast: {str(e)}")
             raise
-
-            
-        

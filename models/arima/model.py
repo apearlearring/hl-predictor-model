@@ -5,11 +5,7 @@ from typing import Optional, Tuple
 
 from models.arima.configs import ArimaConfig
 from models.arima.utils import (
-    adf_test,
-    differencing,
     grid_search_arima,
-    resample_data,
-    reverse_differencing,
 )
 from models.base_model import Model
 
@@ -34,9 +30,6 @@ class ArimaModel(Model):
             raise ValueError("Current price column not found in data")
         if len(data) < self.MIN_DATA_POINTS:
             raise ValueError(f"Insufficient data points. Minimum required: {self.MIN_DATA_POINTS}")
-    
-    def train(self, data: pd.DataFrame):
-        print("training")
     
     def _prepare_time_series(self, data: pd.DataFrame) -> pd.Series:
         """
@@ -94,7 +87,7 @@ class ArimaModel(Model):
             q_values=self.config.q_values,
         )
     
-    def _generate_forecast(self, model_fit: ARIMA, steps: int, start_time: pd.Timestamp) -> Tuple[pd.Series, pd.DataFrame]:
+    def _generate_forecast(self, model_fit: ARIMA, steps: int) -> Tuple[pd.Series, pd.DataFrame]:
         """Generate forecast and confidence intervals"""
         forecast_result = model_fit.get_forecast(steps=steps)
         
@@ -113,12 +106,11 @@ class ArimaModel(Model):
             
             # Prepare data
             prices = self._prepare_time_series(last_known_data)
-            pred_start = prices.index[-1]
             
             # Generate forecasts
             model = ARIMA(prices, order=self.config.best_params)
             model_fit = model.fit(method_kwargs={"warn_convergence": False})
-            predictions, conf_int = self._generate_forecast(model_fit, steps, pred_start)
+            predictions, conf_int = self._generate_forecast(model_fit, steps)
             
             # Create forecast DataFrame
             forecast = pd.DataFrame({
@@ -133,3 +125,5 @@ class ArimaModel(Model):
         except Exception as e:
             print(f"Error in ARIMA forecast: {str(e)}")
             raise
+
+    

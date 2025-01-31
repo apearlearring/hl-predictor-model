@@ -6,7 +6,6 @@ Runs pylint on the codebase and fixes common issues.
 
 import os
 import subprocess
-import sys
 from typing import List, Tuple
 
 

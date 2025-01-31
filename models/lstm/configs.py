@@ -14,7 +14,7 @@ class LstmConfig:
     def __init__(self):
         # Model architecture parameters
         self.features = 7  # Input size (number of features)
-        self.n_steps_out = 24  # Number of time steps used for LSTM output
+        self.n_steps_out = 1  # Number of time steps used for LSTM output
         self.hidden_size = 64  # Number of LSTM units per layer
         self.hidden_size2 = 32  # Number of LSTM units per layer
         self.output_size = 1  # Output size (prediction dimension)
@@ -26,14 +26,14 @@ class LstmConfig:
         # Training parameters
         self.learning_rate = 0.0001  # Learning rate for the optimizer
         self.batch_size = 32  # Batch size for training
-        self.epochs = 1  # Number of training epochs
+        self.epochs = 10  # Number of training epochs
         self.early_stopping_patience = 10  # Early stopping patience in epochs
 
         # Data processing
         self.validation_split = 0.2  # Proportion of data used for validation
         self.time_steps = 60  # Number of time steps used for LSTM input
         self.interval = '5T'  # Default to daily interval (e.g., 'D', '5M', 'H', 'W', 'M')
-        self.window = 24
+        self.window = 1
         self.simulations = 10
         self.conf_int = 0.8
 

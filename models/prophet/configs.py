@@ -15,7 +15,7 @@ class ProphetConfig:
         self.interval = "5min"
         self.yearly_seasonality = False
         self.weekly_seasonality = False
-        self.daily_seasonality = True
+        self.daily_seasonality = False
         self.seasonality_mode = "multiplicative"
         self.remove_timezone = True
 

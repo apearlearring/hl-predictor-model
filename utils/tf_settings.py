@@ -1,8 +1,12 @@
 import os
+import warnings
 import tensorflow as tf
 
 def setup_tensorflow():
     """Configure TensorFlow settings to minimize warnings and ensure consistent behavior"""
+    # Suppress warnings
+    warnings.filterwarnings('ignore')
+    
     # Disable all TensorFlow logging except errors
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     
@@ -15,10 +19,8 @@ def setup_tensorflow():
     # Enable deterministic operations
     os.environ['TF_DETERMINISTIC_OPS'] = '1'
     
-    # Configure TensorFlow behavior
+    # Configure TensorFlow behavior using newer API
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-    tf.compat.v1.disable_eager_execution()
     
     # Configure Keras backend
-    from tensorflow.keras import backend as K
-    K.set_floatx('float32') 
+    tf.keras.backend.set_floatx('float32')
